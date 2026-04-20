@@ -33,8 +33,9 @@
 
 from __future__ import unicode_literals
 
-import numpy as np
 import itertools
+
+import numpy as np
 
 VITERBI_CONSTRAINT_NONE = 0
 VITERBI_CONSTRAINT_FORBIDDEN = 1
@@ -72,7 +73,7 @@ def _update_transition(transition, consecutive):
 def _update_initial(initial, consecutive):
 
     new_n_states = np.sum(consecutive)
-    new_initial = LOG_ZERO * np.ones((new_n_states, ))
+    new_initial = LOG_ZERO * np.ones((new_n_states,))
 
     n_states = len(consecutive)
     boundary = np.hstack(([0], np.cumsum(consecutive)))
@@ -86,18 +87,24 @@ def _update_initial(initial, consecutive):
 
 # create new emission prob. matrix accounting for duplicated states.
 def _update_emission(emission, consecutive):
-    
+
     return np.vstack(
-        [np.tile(e, (c, 1))  # duplicate emission probabilities c times
-        for e, c in zip(emission.T, consecutive)]).T
+        [
+            np.tile(e, (c, 1))  # duplicate emission probabilities c times
+            for e, c in zip(emission.T, consecutive)
+        ]
+    ).T
 
 
 # create new constraint matrix accounting for duplicated states
 def _update_constraint(constraint, consecutive):
-    
+
     return np.vstack(
-        [np.tile(e, (c, 1))  # duplicate constraint probabilities c times
-        for e, c in zip(constraint.T, consecutive)]).T
+        [
+            np.tile(e, (c, 1))  # duplicate constraint probabilities c times
+            for e, c in zip(constraint.T, consecutive)
+        ]
+    ).T
 
 
 # convert sequence of duplicated states back to sequence of original states.
@@ -115,8 +122,7 @@ def _update_states(states, consecutive):
     return new_states
 
 
-def viterbi_decoding(emission, transition,
-                     initial=None, consecutive=None, constraint=None):
+def viterbi_decoding(emission, transition, initial=None, consecutive=None, constraint=None):
     """(Constrained) Viterbi decoding
 
     Parameters
@@ -149,22 +155,22 @@ def viterbi_decoding(emission, transition,
 
     # no minimum-consecutive-states constraints
     if consecutive is None:
-        consecutive = np.ones((k, ), dtype=int)
+        consecutive = np.ones((k,), dtype=int)
 
     # same value for all states
     elif isinstance(consecutive, int):
-        consecutive = consecutive * np.ones((k, ), dtype=int)
+        consecutive = consecutive * np.ones((k,), dtype=int)
 
     # (potentially) different values per state
     else:
-        consecutive = np.array(consecutive, dtype=int).reshape((k, ))
+        consecutive = np.array(consecutive, dtype=int).reshape((k,))
 
     # at least one sample
     consecutive = np.maximum(1, consecutive)
 
     # balance initial probabilities when they are not provided
     if initial is None:
-        initial = np.log(np.ones((k, )) / k)
+        initial = np.log(np.ones((k,)) / k)
 
     # no constraint?
     if constraint is None:
@@ -179,28 +185,24 @@ def viterbi_decoding(emission, transition,
     states = np.arange(K)  # states 0 to K-1
 
     # set emission probability to zero for forbidden states
-    emission[
-        np.where(constraint == VITERBI_CONSTRAINT_FORBIDDEN)] = LOG_ZERO
+    emission[np.where(constraint == VITERBI_CONSTRAINT_FORBIDDEN)] = LOG_ZERO
 
     # set emission probability to zero for all states but the mandatory one
-    for t, k in zip(
-        *np.where(constraint == VITERBI_CONSTRAINT_MANDATORY)
-    ):
+    for t, k in zip(*np.where(constraint == VITERBI_CONSTRAINT_MANDATORY)):
         emission[t, states != k] = LOG_ZERO
 
     # ~~ FORWARD PASS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    V = np.empty((T, K))                # V[t, k] is the probability of the
+    V = np.empty((T, K))  # V[t, k] is the probability of the
     V[0, :] = emission[0, :] + initial  # most probable state sequence for the
-                                        # first t observations that has k as
-                                        # its final state.
+    # first t observations that has k as
+    # its final state.
 
     P = np.empty((T, K), dtype=int)  # P[t, k] remembers which state was used
-    P[0, :] = states                 # to get from time t-1 to time t at
-                                     # state k
+    P[0, :] = states  # to get from time t-1 to time t at
+    # state k
 
     for t in range(1, T):
-
         # tmp[k, k'] is the probability of the most probable path
         # leading to state k at time t - 1, plus the probability of
         # transitioning from state k to state k' (at time t)

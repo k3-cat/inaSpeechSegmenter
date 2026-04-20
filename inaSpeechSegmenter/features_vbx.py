@@ -6,29 +6,43 @@
 # Available on : https://github.com/BUTSpeechFIT/VBx/blob/master/VBx/features.py
 
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 def framing(a, window, shift=1):
     shape = ((a.shape[0] - window) // shift + 1, window) + a.shape[1:]
-    strides = (a.strides[0]*shift, a.strides[0]) + a.strides[1:]
+    strides = (a.strides[0] * shift, a.strides[0]) + a.strides[1:]
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
 # Mel and inverse Mel scale warping functions
 def mel_inv(x):
-    return (np.exp(x/1127.) - 1.) * 700.
+    return (np.exp(x / 1127.0) - 1.0) * 700.0
 
 
 def mel(x):
-    return 1127. * np.log(1. + x/700.)
+    return 1127.0 * np.log(1.0 + x / 700.0)
 
 
 def preemphasis(x, coef=0.97):
     return x - np.c_[x[..., :1], x[..., :-1]] * coef
 
 
-def mel_fbank_mx(winlen_nfft, fs, NUMCHANS=20, LOFREQ=0.0, HIFREQ=None, warp_fn=mel, inv_warp_fn=mel_inv, htk_bug=True):
+def mel_fbank_mx(
+    winlen_nfft,
+    fs,
+    NUMCHANS=20,
+    LOFREQ=0.0,
+    HIFREQ=None,
+    warp_fn=mel,
+    inv_warp_fn=mel_inv,
+    htk_bug=True,
+):
     """Returns mel filterbank as an array (NFFT/2+1 x NUMCHANS)
     winlen_nfft - Typically the window length as used in mfcc_htk() call. It is
                   used to determine number of samples for FFT computation (NFFT).
@@ -44,24 +58,40 @@ def mel_fbank_mx(winlen_nfft, fs, NUMCHANS=20, LOFREQ=0.0, HIFREQ=None, warp_fn=
     inv_warp_fn - inverse function to warp_fn
     """
     HIFREQ = 0.5 * fs if not HIFREQ else HIFREQ
-    nfft = 2**int(np.ceil(np.log2(winlen_nfft))) if winlen_nfft > 0 else -int(winlen_nfft)
+    nfft = 2 ** int(np.ceil(np.log2(winlen_nfft))) if winlen_nfft > 0 else -int(winlen_nfft)
 
     fbin_mel = warp_fn(np.arange(nfft / 2 + 1, dtype=float) * fs / nfft)
     cbin_mel = np.linspace(warp_fn(LOFREQ), warp_fn(HIFREQ), NUMCHANS + 2)
     cind = np.floor(inv_warp_fn(cbin_mel) / fs * nfft).astype(int) + 1
     mfb = np.zeros((len(fbin_mel), NUMCHANS))
     for i in range(NUMCHANS):
-        mfb[cind[i]:cind[i+1], i] = (cbin_mel[i] - fbin_mel[cind[i]:cind[i+1]]) / (cbin_mel[i] - cbin_mel[i+1])
-        mfb[cind[i+1]:cind[i+2], i] = (cbin_mel[i+2] - fbin_mel[cind[i+1]:cind[i+2]]) / \
-                                      (cbin_mel[i+2] - cbin_mel[i+1])
+        mfb[cind[i] : cind[i + 1], i] = (cbin_mel[i] - fbin_mel[cind[i] : cind[i + 1]]) / (
+            cbin_mel[i] - cbin_mel[i + 1]
+        )
+        mfb[cind[i + 1] : cind[i + 2], i] = (
+            cbin_mel[i + 2] - fbin_mel[cind[i + 1] : cind[i + 2]]
+        ) / (cbin_mel[i + 2] - cbin_mel[i + 1])
     if LOFREQ > 0.0 and float(LOFREQ) / fs * nfft + 0.5 > cind[0] and htk_bug:
         mfb[cind[0], :] = 0.0  # Just to be HTK compatible
     return mfb
 
 
-def fbank_htk(x, window, noverlap, fbank_mx, nfft=None, _E=None,
-              USEPOWER=False, RAWENERGY=True, PREEMCOEF=0.97, ZMEANSOURCE=False,
-              ENORMALISE=True, ESCALE=0.1, SILFLOOR=50.0, USEHAMMING=True):
+def fbank_htk(
+    x,
+    window,
+    noverlap,
+    fbank_mx,
+    nfft=None,
+    _E=None,
+    USEPOWER=False,
+    RAWENERGY=True,
+    PREEMCOEF=0.97,
+    ZMEANSOURCE=False,
+    ENORMALISE=True,
+    ESCALE=0.1,
+    SILFLOOR=50.0,
+    USEHAMMING=True,
+):
     """Mel log Mel-filter bank channel outputs
     Returns NUMCHANS-by-M matrix of log Mel-filter bank outputs extracted from
     signal x, where M is the number of extracted frames, which can be computed
@@ -90,13 +120,16 @@ def fbank_htk(x, window, noverlap, fbank_mx, nfft=None, _E=None,
       add_dither:
           for adding dithering in HTK-like fashion
     """
-    if type(USEPOWER) == bool:
+
+    energy: Any = None
+
+    if type(USEPOWER) is bool:
         USEPOWER += 1
     if np.isscalar(window):
-        window = np.hamming(window) if USEHAMMING else np.ones(window)
+        window = np.hamming(window) if USEHAMMING else np.ones(window)  # type: ignore
     if nfft is None:
-        nfft = 2**int(np.ceil(np.log2(window.size)))
-    x = framing(x.astype("float"), window.size, window.size-noverlap).copy()
+        nfft = 2 ** int(np.ceil(np.log2(window.size)))
+    x = framing(x.astype("float"), window.size, window.size - noverlap).copy()
     if ZMEANSOURCE:
         x -= x.mean(axis=1)[:, np.newaxis]
     if _E is not None and RAWENERGY:
@@ -113,19 +146,22 @@ def fbank_htk(x, window, noverlap, fbank_mx, nfft=None, _E=None,
     x = np.log(np.maximum(1.0, np.dot(x, fbank_mx)))
     if _E is not None and ENORMALISE:
         energy = (energy - energy.max()) * ESCALE + 1.0
-        min_val = -np.log(10**(SILFLOOR/10.)) * ESCALE + 1.0
+        min_val = -np.log(10 ** (SILFLOOR / 10.0)) * ESCALE + 1.0
         energy[energy < min_val] = min_val
 
-    return np.hstack(([energy[:, np.newaxis]] if _E == "first" else []) + [x] +
-                     ([energy[:, np.newaxis]] if (_E in ["last", True]) else []))
+    return np.hstack(
+        ([energy[:, np.newaxis]] if _E == "first" else [])
+        + [x]
+        + ([energy[:, np.newaxis]] if (_E in ["last", True]) else [])
+    )
 
 
 def povey_window(winlen):
-    return np.power(0.5 - 0.5*np.cos(np.linspace(0, 2*np.pi, winlen)), 0.85)
+    return np.power(0.5 - 0.5 * np.cos(np.linspace(0, 2 * np.pi, winlen)), 0.85)
 
 
 def add_dither(x, level=8):
-    return x + level * (np.random.rand(*x.shape)*2 - 1)
+    return x + level * (np.random.rand(*x.shape) * 2 - 1)
 
 
 def cmvn_floating_kaldi(x, LC, RC, norm_vars=True):
@@ -139,11 +175,11 @@ def cmvn_floating_kaldi(x, LC, RC, norm_vars=True):
     Global normalization is used if nframes is less than LC+RC+1.
     """
     N, dim = x.shape
-    win_len = min(len(x), LC+RC+1)
-    win_start = np.maximum(np.minimum(np.arange(-LC, N-LC), N-win_len), 0)
+    win_len = min(len(x), LC + RC + 1)
+    win_start = np.maximum(np.minimum(np.arange(-LC, N - LC), N - win_len), 0)
     f = np.r_[np.zeros((1, dim)), np.cumsum(x, 0)]
-    x = x - (f[win_start+win_len] - f[win_start]) / win_len
+    x = x - (f[win_start + win_len] - f[win_start]) / win_len
     if norm_vars:
         f = np.r_[np.zeros((1, dim)), np.cumsum(x**2, 0)]
-        x /= np.sqrt((f[win_start+win_len] - f[win_start]) / win_len)
+        x /= np.sqrt((f[win_start + win_len] - f[win_start]) / win_len)
     return x

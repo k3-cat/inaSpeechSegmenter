@@ -24,12 +24,19 @@
 # THE SOFTWARE.
 
 import os
-from tempfile import TemporaryFile
 import subprocess
+from tempfile import TemporaryFile
+
 import soundfile as sf
 
 
-def media2sig16kmono(medianame, start_sec=None, stop_sec=None, ffmpeg='ffmpeg', dtype='float64'):
+def media2sig16kmono(
+    medianame,
+    start_sec: float | None = None,
+    stop_sec: float | None = None,
+    ffmpeg: str | None = "ffmpeg",
+    dtype="float64",
+):
     """
     Convert media to temp wav 16k mono and return signal
     """
@@ -37,35 +44,38 @@ def media2sig16kmono(medianame, start_sec=None, stop_sec=None, ffmpeg='ffmpeg', 
     if ffmpeg is None:
         if start_sec is not None or stop_sec is not None:
             raise NotImplementedError(
-                f'start_sec={start_sec} and stop_sec={stop_sec} cannot be set ' \
-                f' when running inaSpeechSegmenter without ffmpeg. Please cut '\
-                f'down your audio files beforehand or use ffmpeg.'
+                f"start_sec={start_sec} and stop_sec={stop_sec} cannot be set "
+                f" when running inaSpeechSegmenter without ffmpeg. Please cut "
+                f"down your audio files beforehand or use ffmpeg."
             )
-        if medianame.startswith('http://') or medianame.startswith('https://'):
+        if isinstance(medianame, str) and (
+            medianame.startswith("http://") or medianame.startswith("https://")
+        ):
             raise NotImplementedError(
-                f'Without ffmpeg you cannot process media content on http ' \
-                f'servers. You need to download your audio files beforehand ' \
-                f'or use ffmpeg. You gave medianame={medianame}.'
+                f"Without ffmpeg you cannot process media content on http "
+                f"servers. You need to download your audio files beforehand "
+                f"or use ffmpeg. You gave medianame={medianame}."
             )
 
         sig, sr = sf.read(medianame, dtype=dtype)
-        assert sr == 16_000, \
-            f'Without ffmpeg, inaSpeechSegmenter can only take files sampled ' \
-            f'at 16000 Hz. The file {medianame} is sampled at {sr} Hz.'
+        assert sr == 16_000, (
+            f"Without ffmpeg, inaSpeechSegmenter can only take files sampled "
+            f"at 16000 Hz. The file {medianame} is sampled at {sr} Hz."
+        )
+
         return sig
 
     base, _ = os.path.splitext(os.path.basename(medianame))
 
-
     # build ffmpeg command
-    cmd = [ffmpeg, '-i', medianame, '-f', 'wav', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1']
+    cmd = [ffmpeg, "-i", medianame, "-f", "wav", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1"]
     if start_sec is None:
         start_sec = 0
     else:
-        cmd += ['-ss', '%f' % start_sec]
+        cmd += ["-ss", "%f" % start_sec]
     if stop_sec is not None:
-        cmd += ['-to', '%f' % stop_sec]
-    cmd += ['pipe:1']
+        cmd += ["-to", "%f" % stop_sec]
+    cmd += ["pipe:1"]
 
     with TemporaryFile() as out, TemporaryFile() as err:
         ret = subprocess.run(cmd, stdout=out, stderr=err)
@@ -75,5 +85,7 @@ def media2sig16kmono(medianame, start_sec=None, stop_sec=None, ffmpeg='ffmpeg', 
             raise Exception(msg)
         out.seek(0)
         wav_data, fs = sf.read(out, dtype=dtype)
-    assert(fs == 16000)
+
+    assert fs == 16000
+
     return wav_data

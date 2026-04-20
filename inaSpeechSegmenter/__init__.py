@@ -23,7 +23,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+from . import _version
 from .segmenter import Segmenter, seg2csv
 
-from . import _version
-__version__ = _version.get_versions()['version']
+__all__ = ["Segmenter", "seg2csv"]
+__version__ = _version.get_versions()["version"]
